@@ -265,7 +265,7 @@ end
 
 # Test Dense wrappers (only Float64 supported a present)
 
-## High level interfact
+## High level interface
 for elty in (Float64, Complex{Float64})
     if elty == Float64
         A = randn(5, 5)
@@ -370,11 +370,25 @@ for elty in (Float64, Complex{Float64})
     show(tmp, F)
     @test tmp.size > 0
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
+    elty <: Real && @test_approx_eq sparse(F) A1pd
     @test_approx_eq F\CHOLMOD.Sparse(sparse(ones(elty, 5))) A1pd\ones(5)
     @test_throws DimensionMismatch F\CHOLMOD.Dense(ones(elty, 4))
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
     @test_approx_eq F'\ones(elty, 5) full(A1pd)'\ones(5)
     @test_approx_eq F'\sparse(ones(elty, 5)) full(A1pd)'\ones(5)
+    @test_throws ErrorException F[:Q]
+    L = F[:L]
+    Lcmp = cholfact(full(A1pd))[:L]
+    @test_approx_eq L\ones(elty, 5) Lcmp\ones(5)
+    @test_throws DimensionMismatch L\ones(elty, 4)
+    @test_approx_eq L\ones(elty, 5, 2) Lcmp\ones(5, 2)
+    @test_approx_eq L\sparse(ones(elty, 5)) Lcmp\ones(5)
+    @test_approx_eq L\sparse(ones(elty, 5, 2)) Lcmp\ones(5, 2)
+    @test_approx_eq L'\ones(elty, 5) Lcmp'\ones(5)
+    @test_throws DimensionMismatch L'\ones(elty, 4)
+    @test_approx_eq L'\ones(elty, 5, 2) Lcmp'\ones(5, 2)
+    @test_approx_eq L'\sparse(ones(elty, 5)) Lcmp'\ones(5)
+    @test_approx_eq L'\sparse(ones(elty, 5, 2)) Lcmp'\ones(5, 2)
     @test_approx_eq logdet(F) logdet(full(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
