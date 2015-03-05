@@ -196,21 +196,18 @@ type Factor{Tv,Ti} <: Factorization{Tv}
 end
 
 type FactorComponent{Tv,Ti,S} <: AbstractMatrix{Tv}
-    p::Ptr{CHOLMOD.C_Factor{Tv,Ti}}
+    F::Factor{Tv,Ti}
+
     function FactorComponent(F::Factor{Tv,Ti})
         S == :L || S == :U || error(S, " not supported for sparse matrices; try :L or :U")
-        new(F.p)
-    end
-    function FactorComponent(p::Ptr{C_Factor{Tv,Ti}})
-        S == :L || S == :U || error(S, " not supported for sparse matrices; try :L or :U")
-        new(p)
+        new(F)
     end
 end
 function FactorComponent{Tv,Ti}(F::Factor{Tv,Ti}, sym::Symbol)
     FactorComponent{Tv,Ti,sym}(F)
 end
 
-Factor(FC::FactorComponent) = Factor(FC.p)
+Factor(FC::FactorComponent) = Factor(FC.F)
 
 #################
 # Thin wrappers #
@@ -813,12 +810,13 @@ function sparse(L::Factor)
     A*A'
 end
 sparse{Tv,Ti}(L::FactorComponent{Tv,Ti,:L}) = sparse(Sparse(L))
+sparse{Tv,Ti}(L::FactorComponent{Tv,Ti,:U}) = sparse(Sparse(L'))'
 sparse(D::Dense)    = sparse(Sparse(D))
 
 transpose(A::Sparse)  = transpose_(A, 1)
 ctranspose(A::Sparse) = transpose_(A, 2)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:L}) = FactorComponent{Tv,Ti,:U}(FC.p)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:U}) = FactorComponent{Tv,Ti,:L}(FC.p)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:L}) = FactorComponent{Tv,Ti,:U}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:U}) = FactorComponent{Tv,Ti,:L}(FC.F)
 
 # Calculate the offset into the stype field of the cholmod_sparse_struct and
 # change the value
@@ -861,7 +859,7 @@ function size(A::Union(Dense,Sparse))
     s = unsafe_load(A.p)
     return (int(s.nrow), int(s.ncol))
 end
-function size(F::Union(Factor,FactorComponent), i::Integer)
+function size(F::Factor, i::Integer)
     if i < 1
         throw(ArgumentError("dimension must be positive"))
     end
@@ -871,11 +869,13 @@ function size(F::Union(Factor,FactorComponent), i::Integer)
     end
     return 1
 end
-function size(F::Union(Factor,FactorComponent))
+function size(F::Factor)
     s = unsafe_load(F.p)
     n = int(s.n)
     n, n
 end
+size(FC::FactorComponent, i::Integer) = size(FC.F, i)
+size(FC::FactorComponent) = size(FC.F)
 
 function getindex(A::Dense, i::Integer)
     s = unsafe_load(A.p)
