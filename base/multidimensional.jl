@@ -568,9 +568,16 @@ function getindex(B::BitArray, I0::UnitRange{Int})
     return unsafe_getindex(B, I0)
 end
 
+function getindex(B::BitArray, ::Colon)
+    X = BitArray(0)
+    X.chunks = copy(B.chunks)
+    X.len = length(B)
+    return X
+end
+
 getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
-stagedfunction unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
+stagedfunction unsafe_getindex(B::BitArray, I0::Union(Colon,UnitRange{Int}), I::Union(Int,UnitRange{Int},Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -578,10 +585,10 @@ stagedfunction unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,Uni
         X = BitArray(index_shape(B, I0, $(Isplat...)))
 
         f0 = first(I0)
-        l0 = length(I0)
+        l0 = size(X, 1)
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = length(I_d))
+        @nexprs $N d->(gap_lst_{d+1} = size(X, d+1))
         stride = 1
         ind = f0
         @nexprs $N d->begin
